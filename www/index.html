@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0b1220">
+<title>بوت الذهب</title>
+<style>
+:root{--bg:#0b1220;--card:#131c2e;--card2:#1a2540;--txt:#e8eefc;--mut:#8b9bbd;--up:#22c55e;--down:#ef4444;--acc:#3b82f6;--warn:#f59e0b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;font-size:15px;padding-bottom:40px}
+#mode{text-align:center;font-weight:700;padding:6px;font-size:13px}
+#mode.paper{background:var(--warn);color:#000}#mode.testnet{background:var(--acc)}#mode.live{background:var(--down)}
+header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--card)}
+header h1{font-size:17px;margin:0}
+.bal{direction:ltr;text-align:left}.bal small{display:block;color:var(--mut);font-size:11px}.bal b{font-size:18px}
+main{max-width:640px;margin:0 auto;padding:10px}
+.card{background:var(--card);border-radius:14px;padding:12px;margin-bottom:10px}
+.card h2{font-size:14px;margin:0 0 10px;color:var(--mut);font-weight:600}
+select,input{width:100%;background:var(--card2);color:var(--txt);border:1px solid #2a3a63;border-radius:10px;padding:10px;font-size:15px;font-family:inherit}
+label{font-size:12px;color:var(--mut);display:block;margin-bottom:4px}
+.row{display:flex;gap:8px;margin-top:8px}.row>*{flex:1}
+.price{font-size:26px;font-weight:700;direction:ltr;margin:8px 0}
+button{border:0;border-radius:10px;padding:12px;font-size:16px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit}
+.b-up{background:var(--up)}.b-down{background:var(--down)}.b-acc{background:var(--acc)}.b-ghost{background:#2a3a63;font-size:13px;padding:8px 12px}
+.up{color:var(--up)}.down{color:var(--down)}.mut{color:var(--mut)}
+.pos{background:var(--card2);border-radius:10px;padding:10px;font-size:14px;line-height:1.9}
+.t{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #223054;font-size:13px}
+.t:last-child{border:0}.t .r{direction:ltr;font-weight:700}
+.log{font-size:12px;color:var(--mut);line-height:1.8;max-height:160px;overflow:auto}
+.warn{font-size:12px;color:var(--warn);line-height:1.7;margin-top:8px}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#223054;padding:10px 18px;border-radius:20px;opacity:0;transition:.3s;pointer-events:none;z-index:9;max-width:90%;text-align:center}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="mode">...</div>
+<header><h1>بوت الذهب XAU</h1><div class="bal"><small>الرصيد USDT</small><b id="bal">-</b></div></header>
+<main>
+  <div class="card">
+    <select id="sym"></select>
+    <div class="price" id="price">-</div>
+    <div class="mut" style="font-size:12px" id="lim"></div>
+  </div>
+
+  <div class="card" id="poscard" style="display:none">
+    <h2>الصفقة المفتوحة</h2>
+    <div class="pos" id="pos"></div>
+    <button class="b-down" style="width:100%;margin-top:8px" id="close">سكّر الصفقة</button>
+  </div>
+
+  <div class="card">
+    <h2>صفقة يدوية</h2>
+    <label>المبلغ (Margin بـ USDT)</label>
+    <input id="m-margin" type="number" value="10" min="1" inputmode="decimal">
+    <div class="row"><button class="b-up" id="long">▲ شراء Long</button><button class="b-down" id="short">▼ بيع Short</button></div>
+  </div>
+
+  <div class="card">
+    <h2>البوت</h2>
+    <div class="row" style="margin-top:0">
+      <div><label>المؤشر</label><select id="b-ind"><option>RSI</option><option>MACD</option><option>CCI</option></select></div>
+      <div><label>المبلغ</label><input id="b-margin" type="number" inputmode="decimal"></div>
+    </div>
+    <div class="row">
+      <div><label>SL ($)</label><input id="b-sl" type="number" inputmode="decimal"></div>
+      <div><label>TP ($)</label><input id="b-tp" type="number" inputmode="decimal"></div>
+      <div><label>وقف متحرك ($)</label><input id="b-lock" type="number" inputmode="decimal"></div>
+    </div>
+    <button class="b-acc" id="bot" style="width:100%;margin-top:10px">تشغيل البوت</button>
+    <div class="mut" id="bot-st" style="font-size:12px;text-align:center;margin-top:8px"></div>
+    <div class="mut" id="hint" style="font-size:12px;text-align:center;margin-top:6px;direction:rtl"></div>
+    <div class="warn">الوقف المتحرك: يبدأ SL، ولما الربح يوصل للمسافة المتحركة يتنقل لنقطة الدخول ثم يتبع أعلى ربح. في المود الحقيقي الوقف يتحط ويتحرك داخل باينانس نفسه، يعني الصفقة تبقى محمية حتى إذا سكرت التطبيق. البوت ما يدخلش صفقات جدد إلا والتطبيق مفتوح.</div>
+  </div>
+
+  <div class="card"><h2>الصفقات</h2><div id="trades"></div></div>
+  <div class="card"><h2>السجل</h2><div class="log" id="log"></div></div>
+
+  <div class="card">
+    <h2>الإعدادات</h2>
+    <label>المود</label>
+    <select id="c-mode"><option value="paper">Paper — فلوس وهمية</option><option value="testnet">Testnet — حساب تجريبي</option><option value="live">Live — حقيقي</option></select>
+    <div id="keys">
+      <label style="margin-top:8px">API Key</label><input id="c-key" type="text" autocomplete="off" spellcheck="false" style="direction:ltr">
+      <label style="margin-top:8px">API Secret</label><input id="c-secret" type="password" autocomplete="off" style="direction:ltr">
+    </div>
+    <div class="row">
+      <div><label>الرافعة (1-5)</label><input id="c-lev" type="number" inputmode="numeric"></div>
+      <div><label>أقصى صفقة $</label><input id="c-max" type="number" inputmode="decimal"></div>
+      <div><label>حد الخسارة اليومي $</label><input id="c-day" type="number" inputmode="decimal"></div>
+    </div>
+    <div id="liveBox" style="display:none"><label style="margin-top:8px">للمود الحقيقي اكتب كلمة LIVE للتأكيد</label><input id="c-confirm" type="text" autocomplete="off" style="direction:ltr"></div>
+    <button class="b-acc" id="save" style="width:100%;margin-top:10px">حفظ الإعدادات</button>
+    <div class="warn">المفاتيح تتخزن في الهاتف فقط وتتبعث لباينانس فقط. اعمل المفتاح: Futures + Trade بلا Withdraw. ما تعطي الهاتف لحد.</div>
+  </div>
+</main>
+<div id="toast"></div>
+
+<script>
+//#LOGIC_START
+const core = (function () {
+  function ema(arr, n) { const k = 2 / (n + 1), out = []; let prev; for (let i = 0; i < arr.length; i++) { prev = i === 0 ? arr[0] : arr[i] * k + prev * (1 - k); out.push(prev); } return out; }
+  function rsi(closes, n = 14) {
+    if (closes.length < n + 1) return null;
+    let g = 0, l = 0;
+    for (let i = 1; i <= n; i++) { const d = closes[i] - closes[i - 1]; if (d >= 0) g += d; else l -= d; }
+    g /= n; l /= n;
+    for (let i = n + 1; i < closes.length; i++) { const d = closes[i] - closes[i - 1]; g = (g * (n - 1) + Math.max(d, 0)) / n; l = (l * (n - 1) + Math.max(-d, 0)) / n; }
+    if (l === 0) return 100;
+    return 100 - 100 / (1 + g / l);
+  }
+  function macd(closes) {
+    if (closes.length < 35) return null;
+    const e12 = ema(closes, 12), e26 = ema(closes, 26), m = e12.map((v, i) => v - e26[i]), s = ema(m, 9), i = m.length - 1;
+    return { hist: m[i] - s[i], prevHist: m[i - 1] - s[i - 1] };
+  }
+  function cci(cs, n = 20) {
+    if (cs.length < n) return null;
+    const tp = cs.map(c => (c.h + c.l + c.c) / 3), w = tp.slice(-n), sma = w.reduce((a, b) => a + b, 0) / n, md = w.reduce((a, b) => a + Math.abs(b - sma), 0) / n;
+    if (md === 0) return 0;
+    return (tp[tp.length - 1] - sma) / (0.015 * md);
+  }
+  function signalFor(ind, candles) {
+    const closes = candles.map(c => c.c);
+    if (ind === 'RSI') { const v = rsi(closes); return { dir: v == null ? null : v < 30 ? 'up' : v > 70 ? 'down' : null }; }
+    if (ind === 'MACD') { const m = macd(closes); if (!m) return { dir: null }; return { dir: m.prevHist <= 0 && m.hist > 0 ? 'up' : m.prevHist >= 0 && m.hist < 0 ? 'down' : null }; }
+    if (ind === 'CCI') { const v = cci(candles); return { dir: v == null ? null : v < -100 ? 'up' : v > 100 ? 'down' : null }; }
+    return { dir: null };
+  }
+  return { signalFor };
+})();
+
+const LIVE_BASE = 'https://fapi.binance.com', TEST_BASE = 'https://testnet.binancefuture.com', FEE_RATE = 0.0004;
+const DEFAULT_SYMBOLS = ['XAUUSDT', 'PAXGUSDT'];
+
+async function hmac(secret, msg) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(msg));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function roundStep(qty, step) {
+  const dec = (String(step).split('.')[1] || '').replace(/0+$/, '').length;
+  return +(Math.floor(qty / step + 1e-9) * step).toFixed(dec);
+}
+function roundTick(price, tick) {
+  const dec = (String(tick).split('.')[1] || '').replace(/0+$/, '').length;
+  return +(Math.round(price / tick) * tick).toFixed(dec);
+}
+function stopAt(side, entry, qty, pnl, tick) {
+  return roundTick(entry + (side === 'long' ? 1 : -1) * pnl / qty, tick);
+}
+function normCfg(c) {
+  const n = (v, d) => (v !== '' && v != null && Number.isFinite(+v) ? +v : d);
+  const o = {
+    mode: c.mode || 'paper', key: (c.key || '').trim(), secret: (c.secret || '').trim(), confirm: (c.confirm || '').trim(),
+    leverage: Math.max(1, Math.min(Math.round(n(c.leverage, 3)), 5)), maxMargin: n(c.maxMargin, 10), dailyLoss: n(c.dailyLoss, 5),
+    symbols: c.symbols || DEFAULT_SYMBOLS, base: c.base || '',
+  };
+  if (!['paper', 'testnet', 'live'].includes(o.mode)) throw new Error('مود غير صالح');
+  if (o.mode !== 'paper' && (!o.key || !o.secret)) throw new Error('لازم تدخل API Key و Secret');
+  if (o.mode === 'live' && o.confirm !== 'LIVE') throw new Error('للمود الحقيقي اكتب LIVE للتأكيد');
+  if (!(o.maxMargin > 0) || !(o.dailyLoss > 0)) throw new Error('أقصى صفقة وحد الخسارة لازم يكونو أكبر من 0');
+  return o;
+}
+
+function createExchange(cfg, fetchFn) {
+  const privBase = cfg.base || (cfg.mode === 'live' ? LIVE_BASE : TEST_BASE);
+  const pubBase = cfg.mode === 'paper' ? LIVE_BASE : privBase;
+  const filterCache = {};
+  async function call(base, method, p, params = {}, signed = false) {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) q.append(k, String(v));
+    if (signed) { q.append('recvWindow', '5000'); q.append('timestamp', String(Date.now())); q.append('signature', await hmac(cfg.secret, q.toString())); }
+    const qs = q.toString();
+    const opt = { method, headers: signed ? { 'X-MBX-APIKEY': cfg.key } : {} };
+    if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) opt.signal = AbortSignal.timeout(8000);
+    const res = await fetchFn(base + p + (qs ? '?' + qs : ''), opt);
+    const txt = await res.text(); let data; try { data = JSON.parse(txt); } catch (e) { data = txt; }
+    if (!res.ok) throw new Error(data && data.msg ? data.code + ' ' + data.msg : 'HTTP ' + res.status);
+    return data;
+  }
+  return {
+    async price(sym) { return +(await call(pubBase, 'GET', '/fapi/v1/ticker/price', { symbol: sym })).price; },
+    async klines(sym) { const d = await call(pubBase, 'GET', '/fapi/v1/klines', { symbol: sym, interval: '1m', limit: 120 }); return d.map(k => ({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4] })); },
+    async filters(sym) {
+      if (filterCache[sym]) return filterCache[sym];
+      let f = { step: 0.001, minQty: 0.001, minNotional: 5, tick: 0.01 }, info = null;
+      try { info = await call(pubBase, 'GET', '/fapi/v1/exchangeInfo'); } catch (e) {}
+      if (info) {
+        const s = info.symbols.find(x => x.symbol === sym);
+        if (!s) throw new Error('الزوج ' + sym + ' غير موجود في باينانس');
+        const lot = s.filters.find(x => x.filterType === 'MARKET_LOT_SIZE') || s.filters.find(x => x.filterType === 'LOT_SIZE'), mn = s.filters.find(x => x.filterType === 'MIN_NOTIONAL'), pf = s.filters.find(x => x.filterType === 'PRICE_FILTER');
+        f = { step: +lot.stepSize, minQty: +lot.minQty, minNotional: mn ? +(mn.notional || mn.minNotional) : 5, tick: pf ? +pf.tickSize : 0.01 };
+        filterCache[sym] = f;
+      }
+      return f;
+    },
+    async balance() { const u = (await call(privBase, 'GET', '/fapi/v2/balance', {}, true)).find(x => x.asset === 'USDT'); return u ? +u.availableBalance : 0; },
+    async exchPos(sym) { const d = await call(privBase, 'GET', '/fapi/v2/positionRisk', { symbol: sym }, true); const p = (Array.isArray(d) ? d : [d]).find(x => +x.positionAmt !== 0); return p ? { amt: +p.positionAmt, entry: +p.entryPrice } : null; },
+    async setup(sym) {
+      try { await call(privBase, 'POST', '/fapi/v1/marginType', { symbol: sym, marginType: 'ISOLATED' }, true); } catch (e) { if (!/No need to change/i.test(e.message)) throw e; }
+      await call(privBase, 'POST', '/fapi/v1/leverage', { symbol: sym, leverage: cfg.leverage }, true);
+    },
+    async order(sym, side, qty, reduceOnly) {
+      const p = { symbol: sym, side, type: 'MARKET', quantity: qty, newOrderRespType: 'RESULT' };
+      if (reduceOnly) p.reduceOnly = 'true';
+      return call(privBase, 'POST', '/fapi/v1/order', p, true);
+    },
+    // وقف داخل باينانس نفسه (STOP_MARKET يسكّر الصفقة كاملة) — عبر Algo Order API
+    async stop(sym, side, price) {
+      const d = await call(privBase, 'POST', '/fapi/v1/algoOrder', { algoType: 'CONDITIONAL', symbol: sym, side, type: 'STOP_MARKET', triggerPrice: price, closePosition: 'true', workingType: 'MARK_PRICE' }, true);
+      return d.algoId;
+    },
+    async cancelStop(id) { return call(privBase, 'DELETE', '/fapi/v1/algoOrder', { algoId: id }, true); },
+  };
+}
+
+function createBot(cfg, fetchFn, store) {
+  const ex = createExchange(cfg, fetchFn);
+  const today = () => new Date().toISOString().slice(0, 10);
+  const S = {
+    paper: { balance: 1000 }, pos: null, trades: [], log: [],
+    bot: { on: false, symbol: cfg.symbols[0], ind: 'RSI', margin: 10, sl: 0.3, tp: 0.6, lock: 0.2 },
+    lastCandle: 0, day: today(), dayPnl: 0, price: null, lastVerify: 0,
+  };
+  try { Object.assign(S, store.get() || {}); } catch (e) {}
+  S.bot.on = false;
+  if (!cfg.symbols.includes(S.bot.symbol)) S.bot.symbol = cfg.symbols[0];
+  let balCache = { t: 0, v: null };
+  const save = () => { try { store.set(S); } catch (e) {} };
+  const log = m => { S.log.unshift({ t: Date.now(), m }); S.log.length = Math.min(S.log.length, 60); };
+  const rollDay = () => { if (S.day !== today()) { S.day = today(); S.dayPnl = 0; } };
+  let chain = Promise.resolve();
+  const exclusive = fn => { const r = chain.then(() => fn()); chain = r.catch(() => {}); return r; };
+  const pnlOf = (p, price) => (price - p.entry) * p.qty * (p.side === 'long' ? 1 : -1);
+
+  async function openPos(symbol, side, margin, src) {
+    rollDay();
+    if (S.pos) throw new Error('فيه صفقة مفتوحة');
+    if (!cfg.symbols.includes(symbol)) throw new Error('زوج غير مسموح');
+    if (side !== 'long' && side !== 'short') throw new Error('اتجاه غير صالح');
+    margin = +margin;
+    if (!(margin > 0)) throw new Error('المبلغ غير صالح');
+    if (margin > cfg.maxMargin) throw new Error('المبلغ يفوق الحد الأقصى (' + cfg.maxMargin + ')');
+    if (S.dayPnl <= -cfg.dailyLoss) throw new Error('بلغت حد الخسارة اليومي');
+    const price = await ex.price(symbol), f = await ex.filters(symbol);
+    const qty = roundStep(margin * cfg.leverage / price, f.step);
+    if (qty < f.minQty || qty * price < f.minNotional) throw new Error('المبلغ صغير بزاف لهذا الزوج (الحد الأدنى للقيمة ' + f.minNotional + ' USDT)');
+    let entry = price;
+    const sl = +S.bot.sl, closeSide = side === 'long' ? 'SELL' : 'BUY';
+    if (cfg.mode !== 'paper') {
+      if (await ex.exchPos(symbol)) throw new Error('فيه صفقة مفتوحة في الحساب على هذا الزوج');
+      await ex.setup(symbol);
+      await ex.order(symbol, side === 'long' ? 'BUY' : 'SELL', qty, false);
+      const p = await ex.exchPos(symbol); if (p && p.entry) entry = p.entry;
+    }
+    const pos = S.pos = { symbol, side, qty, entry, margin, sl, tp: +S.bot.tp, lock: +S.bot.lock, best: 0, stopPnl: -sl, stopId: null, stopPrice: null, tick: f.tick, openedAt: Date.now(), src };
+    S.lastVerify = Date.now();
+    log('فتحت ' + (side === 'long' ? 'شراء' : 'بيع') + ' ' + symbol + ' كمية ' + qty + ' بسعر ' + entry + ' (' + src + ')');
+    if (cfg.mode !== 'paper') {
+      // قاعدة أمان: ما نخليوش صفقة حقيقية بلا وقف داخل باينانس
+      pos.stopPrice = stopAt(side, entry, qty, -sl, f.tick);
+      try { pos.stopId = await ex.stop(symbol, closeSide, pos.stopPrice); log('وقف باينانس عند ' + pos.stopPrice); }
+      catch (e) {
+        try { await ex.order(symbol, closeSide, qty, true); S.pos = null; save(); }
+        catch (e2) { save(); log('⚠️ فشل الوقف وفشل الإغلاق! سكّر الصفقة من باينانس فورا'); throw new Error('⚠️ الصفقة مفتوحة بلا وقف وما قدرتش نسكّرها! سكّرها من باينانس فورا: ' + e2.message); }
+        throw new Error('ما قدرتش نحط الوقف في باينانس فسكّرت الصفقة: ' + e.message);
+      }
+    }
+    save();
+  }
+  async function closePos(reason, gone) {
+    const p = S.pos; if (!p) throw new Error('ما كاينش صفقة');
+    const price = gone ? gone.exit : await ex.price(p.symbol);
+    if (cfg.mode !== 'paper' && !gone) {
+      await ex.order(p.symbol, p.side === 'long' ? 'SELL' : 'BUY', p.qty, true);
+      if (p.stopId) { try { await ex.cancelStop(p.stopId); } catch (e) { log('ما قدرتش نلغي وقف باينانس: ' + e.message); } }
+    }
+    const fee = cfg.mode === 'paper' ? (p.entry + price) * p.qty * FEE_RATE : 0;
+    const pnl = +(pnlOf(p, price) - fee).toFixed(4);
+    if (cfg.mode === 'paper') S.paper.balance = +(S.paper.balance + pnl).toFixed(4);
+    rollDay(); S.dayPnl = +(S.dayPnl + pnl).toFixed(4);
+    S.trades.unshift({ t: Date.now(), symbol: p.symbol, side: p.side, qty: p.qty, entry: p.entry, exit: price, pnl, reason, src: p.src });
+    S.trades.length = Math.min(S.trades.length, 50);
+    S.pos = null; balCache.t = 0;
+    log('سكرت ' + p.symbol + ' (' + reason + ') ' + (pnl >= 0 ? '+' : '') + pnl + ' USDT');
+    if (S.bot.on && S.dayPnl <= -cfg.dailyLoss) { S.bot.on = false; log('تم إيقاف البوت: حد الخسارة اليومي'); }
+    save();
+  }
+  async function manage(price) {
+    const p = S.pos, live = cfg.mode !== 'paper', closeSide = p.side === 'long' ? 'SELL' : 'BUY';
+    if (live && Date.now() - S.lastVerify > 4000) {
+      S.lastVerify = Date.now();
+      if (!(await ex.exchPos(p.symbol))) {
+        log('باينانس سكّر الصفقة (الوقف اشتغل)');
+        return closePos(p.stopPnl > -p.sl ? 'LOCK-BN' : 'SL-BN', { exit: p.stopPrice != null ? p.stopPrice : price });
+      }
+    }
+    const pnl = pnlOf(p, price);
+    if (pnl > p.best) p.best = pnl;
+    let stop = -p.sl;
+    if (p.lock > 0 && p.best >= p.lock) stop = Math.max(stop, p.best - p.lock);
+    if (!live) p.stopPnl = stop;
+    if (p.tp > 0 && pnl >= p.tp) return closePos('TP');
+    if (pnl <= stop) return closePos(stop > -p.sl ? 'LOCK' : 'SL');
+    // الوقف المتحرك: نرفعو داخل باينانس كلما تحسّن (نحط الجديد قبل ما نلغي القديم)
+    if (live && p.stopId && stop - p.stopPnl >= Math.max(p.lock * 0.25, p.tick * p.qty * 2)) {
+      const np = stopAt(p.side, p.entry, p.qty, stop, p.tick);
+      if (np === p.stopPrice) return;
+      try {
+        const id = await ex.stop(p.symbol, closeSide, np), old = p.stopId;
+        p.stopId = id; p.stopPrice = np; p.stopPnl = stop;
+        log('رفعت الوقف في باينانس إلى ' + np);
+        try { await ex.cancelStop(old); } catch (e) { log('ما قدرتش نلغي الوقف القديم: ' + e.message); }
+        save();
+      } catch (e) {
+        if (/-2021|immediately/i.test(e.message)) return closePos('LOCK');
+        log('ما قدرتش نحرك الوقف: ' + e.message);
+      }
+    }
+  }
+  async function signalStep() {
+    const sym = S.bot.symbol, closed = (await ex.klines(sym)).slice(0, -1), last = closed[closed.length - 1];
+    if (!last || last.t === S.lastCandle) return;
+    S.lastCandle = last.t;
+    const sig = core.signalFor(S.bot.ind, closed);
+    if (sig.dir) { log('إشارة ' + S.bot.ind + ' على ' + sym + ': ' + (sig.dir === 'up' ? 'شراء' : 'بيع')); await openPos(sym, sig.dir === 'up' ? 'long' : 'short', S.bot.margin, 'bot'); }
+  }
+  function tick() {
+    return exclusive(async () => {
+      try {
+        const sym = S.pos ? S.pos.symbol : S.bot.symbol, price = await ex.price(sym);
+        S.price = { symbol: sym, price, t: Date.now() };
+        if (S.pos) await manage(price);
+        if (S.bot.on && !S.pos) await signalStep();
+      } catch (e) {
+        log('خطأ: ' + e.message);
+        if (S.bot.on && !S.pos) { S.bot.on = false; log('تم إيقاف البوت بسبب الخطأ'); }
+      }
+    });
+  }
+  async function getState() {
+    let balance = S.paper.balance;
+    if (cfg.mode !== 'paper') {
+      if (Date.now() - balCache.t > 10000) { try { balCache = { t: Date.now(), v: await ex.balance() }; } catch (e) { balCache = { t: Date.now(), v: null }; } }
+      balance = balCache.v;
+    }
+    const pos = S.pos ? { ...S.pos, pnl: S.price && S.price.symbol === S.pos.symbol ? +pnlOf(S.pos, S.price.price).toFixed(4) : 0 } : null;
+    const hint = S.price ? (() => { const raw = S.bot.margin * cfg.leverage / S.price.price, q = Math.floor(raw * 1000) / 1000 || raw; return { price: S.price.price, qty: q, sl: S.bot.sl / q, tp: S.bot.tp / q, lock: S.bot.lock / q }; })() : null;
+    return { hint, mode: cfg.mode, leverage: cfg.leverage, maxMargin: cfg.maxMargin, dailyLoss: cfg.dailyLoss, dayPnl: S.dayPnl, symbols: cfg.symbols, balance, price: S.price, pos, bot: S.bot, trades: S.trades.slice(0, 20), log: S.log.slice(0, 25) };
+  }
+  function setBot(b) {
+    const nb = { ...S.bot };
+    if (b.symbol !== undefined) { if (!cfg.symbols.includes(b.symbol)) throw new Error('زوج غير مسموح'); nb.symbol = b.symbol; }
+    if (b.ind !== undefined) { if (!['RSI', 'MACD', 'CCI'].includes(b.ind)) throw new Error('مؤشر غير صالح'); nb.ind = b.ind; }
+    for (const k of ['margin', 'sl', 'tp', 'lock']) if (b[k] !== undefined) { const v = +b[k]; if (!(v >= 0) || !Number.isFinite(v)) throw new Error('قيمة غير صالحة: ' + k); nb[k] = v; }
+    if (!(nb.margin > 0) || nb.margin > cfg.maxMargin) throw new Error('المبلغ لازم بين 0 و ' + cfg.maxMargin);
+    if (!(nb.sl > 0)) throw new Error('وقف الخسارة (SL) لازم يكون أكبر من 0');
+    if (b.on !== undefined) {
+      if (b.on && S.dayPnl <= -cfg.dailyLoss) throw new Error('بلغت حد الخسارة اليومي');
+      if (b.on && !S.bot.on) { S.lastCandle = 0; log('تشغيل البوت: ' + nb.ind + ' على ' + nb.symbol); }
+      if (!b.on && S.bot.on) log('تم إيقاف البوت');
+      nb.on = !!b.on;
+    }
+    S.bot = nb; save();
+  }
+  return { S, ex, tick, openPos: (...a) => exclusive(() => openPos(...a)), closePos: r => exclusive(() => closePos(r)), getState, setBot };
+}
+//#LOGIC_END
+
+// ================= الواجهة =================
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+let cfg, bot, inited = false, wake = null;
+function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2500); }
+function start(rawCfg) {
+  cfg = normCfg(rawCfg);
+  bot = createBot(cfg, (u, o) => fetch(u, o), { get: () => lsGet('tb-state:' + cfg.mode), set: v => lsSet('tb-state:' + cfg.mode, v) });
+  inited = false;
+}
+const act = p => p.then(() => refresh()).catch(e => toast(e.message));
+const fmt = (n, d = 2) => n == null ? '-' : (+n).toFixed(d);
+
+async function refresh() {
+  const s = await bot.getState();
+  $('mode').className = s.mode;
+  $('mode').textContent = s.mode === 'live' ? '⚠️ مود حقيقي — فلوس حقيقية' : s.mode === 'testnet' ? 'مود Testnet' : 'مود تجريبي Paper — فلوس وهمية';
+  $('bal').textContent = fmt(s.balance);
+  $('lim').textContent = 'رافعة x' + s.leverage + ' · أقصى صفقة ' + s.maxMargin + ' USDT · حد الخسارة اليومي ' + s.dailyLoss + '$ (اليوم: ' + fmt(s.dayPnl) + '$)';
+  if (!inited) {
+    $('sym').innerHTML = s.symbols.map(x => '<option>' + esc(x) + '</option>').join(''); $('sym').value = s.bot.symbol;
+    $('b-ind').value = s.bot.ind; $('b-margin').value = s.bot.margin; $('b-sl').value = s.bot.sl; $('b-tp').value = s.bot.tp; $('b-lock').value = s.bot.lock;
+    inited = true;
+  }
+  $('price').textContent = s.price ? fmt(s.price.price, s.price.price < 10 ? 4 : 2) : '-';
+  const p = s.pos; $('poscard').style.display = p ? 'block' : 'none';
+  if (p) $('pos').innerHTML = esc(p.symbol) + ' — <b class="' + (p.side === 'long' ? 'up' : 'down') + '">' + (p.side === 'long' ? 'شراء' : 'بيع') + '</b><br>الدخول: ' + fmt(p.entry, 4) + ' · الكمية: ' + p.qty + '<br>الربح الحالي: <b class="' + (p.pnl >= 0 ? 'up' : 'down') + '" style="direction:ltr;display:inline-block">' + (p.pnl >= 0 ? '+' : '') + fmt(p.pnl, 3) + '$</b> · أعلى ربح: ' + fmt(p.best, 3) + '$<br>الوقف عند ربح: ' + (p.stopPnl >= 0 ? '+' : '') + fmt(p.stopPnl, 3) + '$' + (p.stopPrice != null ? ' (وقف باينانس ' + fmt(p.stopPrice, 2) + ')' : '');
+  $('hint').textContent = s.hint ? 'تقريبا: كمية ' + s.hint.qty.toFixed(4) + ' أونصة · SL على بعد ' + s.hint.sl.toFixed(2) + '$ في سعر الذهب · TP ' + s.hint.tp.toFixed(2) + '$ · متحرك ' + s.hint.lock.toFixed(2) + '$' : '';
+  $('bot').textContent = s.bot.on ? 'إيقاف البوت' : 'تشغيل البوت'; $('bot').className = s.bot.on ? 'b-down' : 'b-acc';
+  $('bot-st').textContent = s.bot.on ? ('شغال: ' + s.bot.ind + ' على ' + s.bot.symbol) : 'البوت متوقف';
+  keepAwake(s.bot.on || !!s.pos);
+  $('trades').innerHTML = s.trades.length ? s.trades.map(t => '<div class="t"><div>' + esc(t.symbol) + ' ' + (t.side === 'long' ? '<span class="up">▲</span>' : '<span class="down">▼</span>') + ' <span class="mut">' + esc(t.reason) + ' · ' + esc(t.src) + '</span></div><div class="r ' + (t.pnl >= 0 ? 'up' : 'down') + '">' + (t.pnl >= 0 ? '+' : '') + fmt(t.pnl, 3) + '</div></div>').join('') : '<div class="mut" style="text-align:center">ما كاين حتى صفقة</div>';
+  $('log').innerHTML = s.log.map(l => new Date(l.t).toLocaleTimeString('en-GB') + ' — ' + esc(l.m)).join('<br>');
+}
+async function keepAwake(on) {
+  try {
+    if (on && !wake && navigator.wakeLock) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); }
+    else if (!on && wake) { await wake.release(); wake = null; }
+  } catch (e) {}
+}
+const botCfg = () => ({ symbol: $('sym').value, ind: $('b-ind').value, margin: $('b-margin').value, sl: $('b-sl').value, tp: $('b-tp').value, lock: $('b-lock').value });
+$('sym').onchange = () => { try { bot.setBot({ symbol: $('sym').value }); } catch (e) { toast(e.message); } };
+$('long').onclick = () => act(bot.openPos($('sym').value, 'long', $('m-margin').value, 'يدوي'));
+$('short').onclick = () => act(bot.openPos($('sym').value, 'short', $('m-margin').value, 'يدوي'));
+$('close').onclick = () => act(bot.closePos('يدوي'));
+$('bot').onclick = async () => { try { const st = await bot.getState(); bot.setBot({ ...botCfg(), on: !st.bot.on }); refresh(); } catch (e) { toast(e.message); } };
+$('c-mode').onchange = () => { $('keys').style.display = $('c-mode').value === 'paper' ? 'none' : 'block'; $('liveBox').style.display = $('c-mode').value === 'live' ? 'block' : 'none'; };
+$('save').onclick = async () => {
+  try {
+    const st = await bot.getState();
+    if (st.pos || st.bot.on) throw new Error('سكّر الصفقة وأوقف البوت قبل تغيير الإعدادات');
+    const raw = { mode: $('c-mode').value, key: $('c-key').value, secret: $('c-secret').value, leverage: $('c-lev').value, maxMargin: $('c-max').value, dailyLoss: $('c-day').value, confirm: $('c-confirm').value };
+    const c = normCfg(raw);
+    lsSet('tb-cfg', { ...raw, confirm: '' });
+    start({ ...raw, confirm: raw.confirm }); toast('تم الحفظ — المود: ' + c.mode); refresh();
+  } catch (e) { toast(e.message); }
+};
+(function init() {
+  const saved = lsGet('tb-cfg') || { mode: 'paper' };
+  $('c-mode').value = saved.mode; $('c-key').value = saved.key || ''; $('c-secret').value = saved.secret || '';
+  $('c-lev').value = saved.leverage || 3; $('c-max').value = saved.maxMargin || 10; $('c-day').value = saved.dailyLoss || 5;
+  $('c-mode').onchange();
+  // مود live ما يشتغلش بعد إعادة فتح التطبيق حتى تكتب LIVE من جديد
+  try { start(saved.mode === 'live' ? { ...saved, mode: 'paper' } : saved); if (saved.mode === 'live') toast('اكتب LIVE واحفظ لتفعيل المود الحقيقي'); }
+  catch (e) { start({ mode: 'paper' }); toast(e.message); }
+  refresh(); setInterval(() => bot.tick().then(refresh).catch(() => {}), 3000); setInterval(() => refresh().catch(() => {}), 1000);
+})();
+</script>
+</body>
+</html>
