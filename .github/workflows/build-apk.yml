@@ -23,8 +23,10 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Test
-        run: node test.js
+      - name: Test bridge
+        run: |
+          cd bridge
+          python3 test_bridge.py
 
       - name: Install
         run: npm install

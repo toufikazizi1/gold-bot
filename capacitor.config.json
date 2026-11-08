@@ -2,6 +2,7 @@
   "appId": "com.tito.goldbot",
   "appName": "بوت الذهب",
   "webDir": "www",
+  "server": { "androidScheme": "https", "cleartext": true },
   "plugins": {
     "CapacitorHttp": { "enabled": true }
   }

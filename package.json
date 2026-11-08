@@ -2,8 +2,10 @@
   "name": "gold-bot",
   "version": "1.0.0",
   "private": true,
-  "description": "بوت تداول الذهب XAUUSDT على باينانس فيوتشرز",
-  "scripts": { "test": "node test.js" },
+  "description": "بوت الذهب XAUUSD على Exness MT5",
+  "scripts": {
+    "test": "cd bridge && python3 test_bridge.py"
+  },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
     "@capacitor/cli": "^7.0.0",

@@ -1,3 +1,6 @@
 node_modules
 android
 .env
+bridge/token.txt
+__pycache__
+*.pyc
