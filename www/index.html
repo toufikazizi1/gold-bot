@@ -197,7 +197,7 @@ details p{margin:0 0 14px;color:var(--mut);font-size:13px;line-height:1.8}
         <h3 style="margin-top:4px;font-size:22px">هل تحتاج مساعدة؟</h3>
         <div class="sub" style="margin-bottom:14px">أجوبة سريعة على الأسئلة الأكثر شيوعا.</div>
         <details><summary>كيف يخدم البوت؟</summary><p>الجسر على لابتوب ويندوز يخدم مع MetaTrader 5. ينتظر إشارة المؤشر على شمعة الدقيقة المغلقة، ثم يفتح صفقة في حسابك مع وقف خسارة وهدف داخل MT5 نفسه.</p></details>
-        <details><summary>كيف أربط حسابي Exness؟</summary><p>شغّل الجسر على اللابتوب، ثم في تبويب الحساب ادخل عنوان الجسر والرمز، ورقم الحساب واسم الخادم (مثل Exness-MT5Trial16) وكلمة مرور التداول، واضغط ربط.</p></details>
+        <details><summary>كيف أربط حسابي Exness؟</summary><p>شغّل الجسر على اللابتوب، ثم في تبويب الحساب ادخل عنوان الجسر والرمز، ورقم الحساب واسم الخادم (مثل Exness-MT5Trial16) واضغط ربط (كلمة السر اختيارية، MT5 لازم يكون مفتوح ومسجل دخول).</p></details>
         <details><summary>شنو هو الوقف المتحرك؟</summary><p>الوقف يبدأ عند SL. لما الربح يوصل للقيمة المتحركة، ينتقل الوقف لنقطة الدخول، ثم يتبع أعلى ربح بنفس المسافة، ويتحرك داخل MT5، فالصفقة تبقى محمية حتى إذا سكرت التطبيق.</p></details>
         <details><summary>البوت لا يفتح صفقات، لماذا؟</summary><p>تأكد أن: زر Algo Trading مشعول في MT5، السوق مفتوح، الجسر شغال، والبوت ليس متوقفا بسبب حد الربح أو الخسارة اليومي. السبب الدقيق يظهر في السجل بتبويب روبوت.</p></details>
         <details><summary>هل أستعمل حسابا حقيقيا؟</summary><p>ابدأ بالحساب التجريبي لمدة كافية. لا يوجد ضمان للربح، والتداول بالرافعة يمكن أن يخسر كامل المبلغ.</p></details>
@@ -229,9 +229,9 @@ details p{margin:0 0 14px;color:var(--mut);font-size:13px;line-height:1.8}
         <input class="in" id="cLogin" inputmode="numeric" placeholder="472954969" autocomplete="off">
         <label class="lbl" style="margin-top:10px">الخادم (Server)</label>
         <input class="in" id="cSrv" placeholder="Exness-MT5Trial16" autocomplete="off" autocapitalize="off" spellcheck="false">
-        <label class="lbl" style="margin-top:10px">كلمة مرور التداول</label>
+        <label class="lbl" style="margin-top:10px">كلمة مرور التداول (اختياري)</label>
         <input class="in" id="cPw" type="password" autocomplete="off">
-        <div class="sub" style="margin:6px 2px 12px">كلمة المرور تتبعث للجسر في شبكتك فقط ولا تتخزن في الهاتف.</div>
+        <div class="sub" style="margin:6px 2px 12px">اتركها فارغة: الجسر يستعمل MT5 المفتوح المسجّل دخول أصلا (الأسلم). لازم MT5 مفتوح على نفس الحساب.</div>
         <button class="btn" onclick="connect()">ربط الحساب</button>
 
         <div class="menu" style="margin-top:16px">

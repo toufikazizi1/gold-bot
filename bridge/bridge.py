@@ -103,13 +103,20 @@ class Engine:
                 login = int(str(login).strip())
             except ValueError:
                 raise BotError('رقم الحساب غير صالح')
-            if not password or not str(server).strip():
-                raise BotError('لازم تدخل كلمة المرور واسم الخادم')
-            if not m.initialize(login=login, password=password, server=str(server).strip()):
-                raise BotError('فشل الاتصال بـ MT5: %s' % (m.last_error(),))
+            server = str(server or '').strip()
+            if password:
+                ok = m.initialize(login=login, password=password, server=server)
+            else:
+                # بدون كلمة سر: نتصل بـ MT5 المفتوح والمسجّل دخول أصلا (ما يعيدش تسجيل الدخول)
+                ok = m.initialize()
+            if not ok:
+                raise BotError('فشل الاتصال بـ MT5: %s. تأكد MT5 مفتوح ومسجل دخول' % (m.last_error(),))
             info = m.account_info()
             if info is None or info.login != login:
-                raise BotError('ما قدرتش نتسجل في الحساب %s: %s' % (login, m.last_error()))
+                got = getattr(info, 'login', None)
+                raise BotError('MT5 المفتوح مسجل على حساب %s مش %s' % (got, login))
+            if server and str(getattr(info, 'server', '')).lower() != server.lower():
+                raise BotError('خادم MT5 هو %s مش %s' % (getattr(info, 'server', ''), server))
             self.symbol = self.resolve_symbol(symbol or None)
             self.connected = True
             self.best = {}

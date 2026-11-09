@@ -34,6 +34,8 @@ class FakeMT5:
 
     # --- اتصال ---
     def initialize(self, login=None, password=None, server=None):
+        if login is None and password is None and server is None:
+            return True  # اتصال بالطرفية المفتوحة بدون إعادة تسجيل دخول
         return login == self.ok_login and password == 'pw' and server == 'Exness-MT5Trial16'
 
     def last_error(self):
@@ -145,6 +147,11 @@ def test_connect():
     m3 = FakeMT5(); m3.algo = False
     e3 = Engine(m3); e3.connect(472954969, 'pw', 'Exness-MT5Trial16')
     assert any('Algo Trading' in l['m'] for l in e3.logs)
+    # بدون كلمة سر: يتصل بـ MT5 المفتوح
+    m4 = FakeMT5(); e4 = Engine(m4); e4.connect(472954969, '', 'Exness-MT5Trial16')
+    assert e4.connected
+    raises(lambda: Engine(FakeMT5()).connect(111, '', 'Exness-MT5Trial16'), 'مسجل على حساب')
+    raises(lambda: Engine(FakeMT5()).connect(472954969, '', 'Other-Server'), 'خادم MT5')
 
 
 def test_open_and_sl_tp():
