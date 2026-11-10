@@ -16,15 +16,12 @@ input int    InpMaxOrdersPerMin  = 20;     // أقصى عدد صفقات في ا
 input int    InpMaxHoldSec       = 60;     // إذا ما ربحت، تبقى مفتوحة حتى هذه المدة ثم تغلق (ثانية، 0 = بدون)
 input int    InpMaxSpreadPts     = 600;    // أقصى سبريد مسموح (نقاط)
 
-input group "=== الاتجاه ==="
-input bool   InpUseTrend        = true;   // الدخول فقط في اتجاه الترند
-input int    InpTrendFast        = 20;     // متوسط سريع (شمعة M1)
-input int    InpTrendSlow        = 50;     // متوسط بطيء (شمعة M1)
+input group "=== الاتجاه (حسب الشمعة الحالية M1) ==="
 input double InpSpreadMaxRatio   = 0.4;    // لا تفتح إذا السبريد أكبر من هذه النسبة من الهدف
 
-input group "=== الإشارة (حركة لحظية) ==="
-input int    InpMomentumTicks    = 6;      // عدد التكات الأخيرة للمقارنة
-input double InpMinMovePrice     = 0.08;   // أقل حركة بالسعر لفتح صفقة (مثلا 0.08$)
+input group "=== الإشارة ==="
+input int    InpMomentumTicks    = 6;      // (غير مستعمل)
+input double InpMinMovePrice     = 0.10;   // أقل حجم للشمعة الحالية لفتح صفقة (بالسعر، مثلا 0.10$)
 
 input group "=== الوقف والربح بالدولار ==="
 input double InpSL_USD           = 3.0;    // وقف الخسارة الواسع لكل صفقة ($) - حماية فقط
@@ -40,8 +37,6 @@ input group "=== عام ==="
 input long   InpMagic            = 777002; // رقم يميز صفقات هذا البوت
 
 CTrade   trade;
-int      g_hFast = INVALID_HANDLE;
-int      g_hSlow = INVALID_HANDLE;
 double   g_ticks[];          // آخر أسعار (وسط السعر)
 int      g_tickCount = 0;
 ulong    g_tickets[];        // أفضل ربح لكل صفقة
@@ -61,9 +56,6 @@ int OnInit()
    trade.SetTypeFillingBySymbol(_Symbol);
    trade.SetAsyncMode(false);
    ArrayResize(g_ticks, MathMax(InpMomentumTicks, 2));
-   g_hFast = iMA(_Symbol, PERIOD_M1, InpTrendFast, 0, MODE_EMA, PRICE_CLOSE);
-   g_hSlow = iMA(_Symbol, PERIOD_M1, InpTrendSlow, 0, MODE_EMA, PRICE_CLOSE);
-   if(InpUseTrend && (g_hFast == INVALID_HANDLE || g_hSlow == INVALID_HANDLE)) return(INIT_FAILED);
    EventSetMillisecondTimer(100);
    Print("GoldScalper جاهز على ", _Symbol, " | Lot=", InpLot, " | Max=", InpMaxPositions);
    return(INIT_SUCCEEDED);
@@ -72,8 +64,6 @@ int OnInit()
 void OnDeinit(const int reason)
   {
    EventKillTimer();
-   if(g_hFast != INVALID_HANDLE) IndicatorRelease(g_hFast);
-   if(g_hSlow != INVALID_HANDLE) IndicatorRelease(g_hSlow);
   }
 
 //+------------------------------------------------------------------+
@@ -203,16 +193,15 @@ void ManagePositions()
   }
 
 //+------------------------------------------------------------------+
-//| اتجاه الترند: 1 صعود، -1 هبوط، 0 غير واضح                         |
+//| اتجاه الشمعة الحالية: 1 صاعدة، -1 هابطة، 0 صغيرة/غير واضحة          |
 //+------------------------------------------------------------------+
-int TrendDir()
+int CandleDir(double mid)
   {
-   if(!InpUseTrend) return 2;   // 2 = أي اتجاه
-   double f[1], sl[1];
-   if(CopyBuffer(g_hFast, 0, 0, 1, f) != 1) return 0;
-   if(CopyBuffer(g_hSlow, 0, 0, 1, sl) != 1) return 0;
-   if(f[0] > sl[0]) return 1;
-   if(f[0] < sl[0]) return -1;
+   double o = iOpen(_Symbol, PERIOD_M1, 0);
+   if(o <= 0) return 0;
+   double body = mid - o;
+   if(body >= InpMinMovePrice) return 1;
+   if(body <= -InpMinMovePrice) return -1;
    return 0;
   }
 
@@ -266,19 +255,11 @@ void OnTick()
    if(bid <= 0 || ask <= 0) return;
    double mid = (bid + ask) / 2.0;
 
-   int need = MathMax(InpMomentumTicks, 2);
-   if(ArraySize(g_ticks) != need) ArrayResize(g_ticks, need);
-   // نحفظ التكة في آخر القائمة
-   for(int i = 0; i < need - 1; i++) g_ticks[i] = g_ticks[i + 1];
-   g_ticks[need - 1] = mid;
-   if(g_tickCount < need) { g_tickCount++; ManagePositions(); return; }
-
    ManagePositions();
    CheckDayLimits();
    if(g_stopped) return;
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED)) return;
 
-   double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
    int spread = (int)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
    if(InpMaxSpreadPts > 0 && spread > InpMaxSpreadPts) return;
    if(CountMyPositions() >= InpMaxPositions) return;
@@ -287,11 +268,6 @@ void OnTick()
    ulong minGap = (InpMaxOrdersPerMin > 0) ? (ulong)(60000 / InpMaxOrdersPerMin) : 0;
    if(GetTickCount64() - g_lastOpenMs < minGap) return;
 
-   double sum = 0.0;
-   for(int i = 0; i < need - 1; i++) sum += g_ticks[i];
-   double avg = sum / (need - 1);
-   double move = mid - avg;
-
    // السبريد بالدولار لازم يكون صغير مقارنة بالهدف
    if(InpTP_USD > 0)
      {
@@ -299,10 +275,9 @@ void OnTick()
       if(spreadUsd > InpTP_USD * InpSpreadMaxRatio) return;
      }
 
-   int trend = TrendDir();
-   if(trend == 0) return;
-   if(move >= InpMinMovePrice && (trend == 1 || trend == 2))        TryOpen(true);
-   else if(move <= -InpMinMovePrice && (trend == -1 || trend == 2)) TryOpen(false);
+   int dir = CandleDir(mid);
+   if(dir == 1)       TryOpen(true);
+   else if(dir == -1) TryOpen(false);
   }
 
 //+------------------------------------------------------------------+
