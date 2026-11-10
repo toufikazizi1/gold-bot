@@ -234,6 +234,10 @@ def test_signal_flow():
     e.tick()
     assert m.positions and m.positions[0].type == 0, 'RSI منخفض => شراء'
     assert e.bot['on']
+    # لحظي: بعد الإغلاق، نفس الاتجاه ما يعاودش في نفس الشمعة
+    e.close_position()
+    e.tick()
+    assert not m.positions, 'مرة وحدة لكل اتجاه في الشمعة'
 
 
 def test_day_limits():

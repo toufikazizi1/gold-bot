@@ -20,6 +20,7 @@ import indicators
 
 MAGIC = 777001
 GOLD_CANDIDATES = ['XAUUSDm', 'XAUUSD', 'XAUUSDc', 'XAUUSD.a', 'XAUUSDz', 'XAUUSD#', 'GOLD']
+LIVE = os.environ.get('GOLD_LIVE', '1') != '0'  # وضع لحظي: إشارات على الشمعة الجارية + حلقة سريعة
 MAX_LOT = float(os.environ.get('MAX_LOT', '0.05'))  # حماية: أقصى حجم للصفقة
 
 
@@ -38,6 +39,10 @@ class Engine:
         self.logs = []
         self.best = {}
         self.last_candle = 0
+        self.live = LIVE
+        self.positions_cached = False
+        self.live_skip = 0
+        self.live_sig = None
         self.cur_max_min = 0
 
     # ---------- أدوات ----------
@@ -188,6 +193,8 @@ class Engine:
         rates = m.copy_rates_from_pos(self.symbol, m.TIMEFRAME_M1, 0, 3)
         if rates is not None and len(rates) >= 2:
             self.last_candle = int(rates[-2]['time'])  # ننتظر الشمعة الجاية، ما ندخلش على إشارة قديمة
+            self.live_skip = int(rates[-1]['time'])
+            self.live_sig = None
 
     # ---------- الصفقات ----------
     def open_position(self, side, lot=None, src='يدوي', max_min=None):
@@ -265,6 +272,7 @@ class Engine:
 
     def _tick(self):
         ps = self.positions()
+        self.positions_cached = bool(ps)
         if ps:
             self._manage(ps[0])
         self._day_limits()
@@ -340,6 +348,18 @@ class Engine:
         m = self.mt5
         rates = m.copy_rates_from_pos(self.symbol, m.TIMEFRAME_M1, 0, 120)
         if rates is None or len(rates) < 40:
+            return
+        if self.live:
+            # لحظي: نقرا الشمعة الجارية كل نبضة، ونفتح مرة وحدة لكل اتجاه في كل شمعة
+            t = int(rates[-1]['time'])
+            if t == self.live_skip:
+                return
+            candles = [{'o': float(r['open']), 'h': float(r['high']), 'l': float(r['low']), 'c': float(r['close'])} for r in rates]
+            d = indicators.signal_for(self.bot['ind'], candles)
+            if d and (t, d) != self.live_sig:
+                self.live_sig = (t, d)
+                self.log('إشارة لحظية %s: %s' % (self.bot['ind'], 'شراء' if d == 'up' else 'بيع'))
+                self.open_position('buy' if d == 'up' else 'sell', None, 'بوت')
             return
         closed = rates[:-1]
         t = int(closed[-1]['time'])
@@ -510,7 +530,10 @@ def serve(engine, token, host, port):
     def loop():
         while True:
             engine.tick()
-            time.sleep(1.5)
+            if engine.live:
+                time.sleep(0.25 if engine.connected and engine.positions_cached else 0.5)
+            else:
+                time.sleep(1.5)
     threading.Thread(target=loop, daemon=True).start()
     return srv
 
