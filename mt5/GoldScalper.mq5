@@ -12,18 +12,24 @@
 input group "=== الصفقات ==="
 input double InpLot              = 0.01;   // حجم الصفقة (Lot)
 input int    InpMaxPositions     = 3;      // أقصى عدد صفقات مفتوحة معاً
-input int    InpMaxOrdersPerMin  = 100;    // أقصى عدد صفقات في الدقيقة
-input int    InpMaxHoldSec       = 8;      // إغلاق إجباري بعد كم ثانية (0 = بدون)
+input int    InpMaxOrdersPerMin  = 20;     // أقصى عدد صفقات في الدقيقة
+input int    InpMaxHoldSec       = 60;     // إذا ما ربحت، تبقى مفتوحة حتى هذه المدة ثم تغلق (ثانية، 0 = بدون)
 input int    InpMaxSpreadPts     = 600;    // أقصى سبريد مسموح (نقاط)
+
+input group "=== الاتجاه ==="
+input bool   InpUseTrend        = true;   // الدخول فقط في اتجاه الترند
+input int    InpTrendFast        = 20;     // متوسط سريع (شمعة M1)
+input int    InpTrendSlow        = 50;     // متوسط بطيء (شمعة M1)
+input double InpSpreadMaxRatio   = 0.4;    // لا تفتح إذا السبريد أكبر من هذه النسبة من الهدف
 
 input group "=== الإشارة (حركة لحظية) ==="
 input int    InpMomentumTicks    = 6;      // عدد التكات الأخيرة للمقارنة
 input double InpMinMovePrice     = 0.08;   // أقل حركة بالسعر لفتح صفقة (مثلا 0.08$)
 
 input group "=== الوقف والربح بالدولار ==="
-input double InpSL_USD           = 1.0;    // وقف الخسارة لكل صفقة ($)
-input double InpTP_USD           = 0.0;    // هدف الربح ($) - 0 = بدون
-input double InpTrailStart_USD   = 0.25;   // يبدأ الوقف المتحرك لما الربح يوصل ($)
+input double InpSL_USD           = 3.0;    // وقف الخسارة الواسع لكل صفقة ($) - حماية فقط
+input double InpTP_USD           = 0.5;    // يغلق لما الربح يوصل ($)
+input double InpTrailStart_USD   = 0.0;    // الوقف المتحرك ($) - 0 = مطفي
 input double InpTrailGap_USD     = 0.15;   // الوقف يبقى وراء أفضل ربح بهذا المبلغ ($)
 
 input group "=== حدود الأمان اليومية ==="
@@ -34,6 +40,8 @@ input group "=== عام ==="
 input long   InpMagic            = 777002; // رقم يميز صفقات هذا البوت
 
 CTrade   trade;
+int      g_hFast = INVALID_HANDLE;
+int      g_hSlow = INVALID_HANDLE;
 double   g_ticks[];          // آخر أسعار (وسط السعر)
 int      g_tickCount = 0;
 ulong    g_tickets[];        // أفضل ربح لكل صفقة
@@ -53,6 +61,9 @@ int OnInit()
    trade.SetTypeFillingBySymbol(_Symbol);
    trade.SetAsyncMode(false);
    ArrayResize(g_ticks, MathMax(InpMomentumTicks, 2));
+   g_hFast = iMA(_Symbol, PERIOD_M1, InpTrendFast, 0, MODE_EMA, PRICE_CLOSE);
+   g_hSlow = iMA(_Symbol, PERIOD_M1, InpTrendSlow, 0, MODE_EMA, PRICE_CLOSE);
+   if(InpUseTrend && (g_hFast == INVALID_HANDLE || g_hSlow == INVALID_HANDLE)) return(INIT_FAILED);
    EventSetMillisecondTimer(100);
    Print("GoldScalper جاهز على ", _Symbol, " | Lot=", InpLot, " | Max=", InpMaxPositions);
    return(INIT_SUCCEEDED);
@@ -61,6 +72,8 @@ int OnInit()
 void OnDeinit(const int reason)
   {
    EventKillTimer();
+   if(g_hFast != INVALID_HANDLE) IndicatorRelease(g_hFast);
+   if(g_hSlow != INVALID_HANDLE) IndicatorRelease(g_hSlow);
   }
 
 //+------------------------------------------------------------------+
@@ -190,6 +203,20 @@ void ManagePositions()
   }
 
 //+------------------------------------------------------------------+
+//| اتجاه الترند: 1 صعود، -1 هبوط، 0 غير واضح                         |
+//+------------------------------------------------------------------+
+int TrendDir()
+  {
+   if(!InpUseTrend) return 2;   // 2 = أي اتجاه
+   double f[1], sl[1];
+   if(CopyBuffer(g_hFast, 0, 0, 1, f) != 1) return 0;
+   if(CopyBuffer(g_hSlow, 0, 0, 1, sl) != 1) return 0;
+   if(f[0] > sl[0]) return 1;
+   if(f[0] < sl[0]) return -1;
+   return 0;
+  }
+
+//+------------------------------------------------------------------+
 //| فتح صفقة                                                          |
 //+------------------------------------------------------------------+
 bool RateLimitOk()
@@ -265,8 +292,17 @@ void OnTick()
    double avg = sum / (need - 1);
    double move = mid - avg;
 
-   if(move >= InpMinMovePrice)       TryOpen(true);
-   else if(move <= -InpMinMovePrice) TryOpen(false);
+   // السبريد بالدولار لازم يكون صغير مقارنة بالهدف
+   if(InpTP_USD > 0)
+     {
+      double spreadUsd = (ask - bid) * InpLot * ContractSize();
+      if(spreadUsd > InpTP_USD * InpSpreadMaxRatio) return;
+     }
+
+   int trend = TrendDir();
+   if(trend == 0) return;
+   if(move >= InpMinMovePrice && (trend == 1 || trend == 2))        TryOpen(true);
+   else if(move <= -InpMinMovePrice && (trend == -1 || trend == 2)) TryOpen(false);
   }
 
 //+------------------------------------------------------------------+
